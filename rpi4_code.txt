@@ -1,0 +1,70 @@
+.global run_alarm
+.type run_alarm, %function
+// ==========================
+// GPIO Offsets
+// ==========================
+.equ GPFSEL1, 0x04
+.equ GPFSEL2, 0x08
+.equ GPSET0,  0x1C
+.equ GPCLR0,  0x28
+.equ GPLEV0,  0x34
+// ==========================
+// Pin assignments
+// ==========================
+.equ BTN,     17     // Push button
+.equ MOTION,  22     // Motion signal from Arduino
+.equ BUZZER,  18
+.equ LED,     27
+// ==========================
+// Entry point
+// ==========================
+run_alarm:
+   mov x1, x0    // GPIO base pointer
+   // -------------------------
+   // Set Buzzer (GPIO18) as output
+   // -------------------------
+   ldr w2, [x1, #GPFSEL1]
+   bic w2, w2, #(7 << 24)
+   orr w2, w2, #(1 << 24)
+   str w2, [x1, #GPFSEL1]
+   // -------------------------
+   // Set LED (GPIO27) as output
+   // -------------------------
+   ldr w2, [x1, #GPFSEL2]
+   bic w2, w2, #(7 << 21)
+   orr w2, w2, #(1 << 21)
+   str w2, [x1, #GPFSEL2]
+loop_main:
+   // --------- Read GPIO input ----------
+   ldr w2, [x1, #GPLEV0]
+   // Check if button pressed (active LOW)
+   tst w2, #(1 << BTN)
+   beq alarm_sequence
+   // Check if motion detected from Arduino (active HIGH)
+   tst w2, #(1 << MOTION)
+   bne alarm_sequence
+   b loop_main
+// -------------------------
+// Alarm sequence: 5 cycles
+// -------------------------
+alarm_sequence:
+   mov w3, #5
+alarm_loop:
+   mov w4, #(1 << BUZZER) | (1 << LED)
+   str w4, [x1, #GPSET0]
+   bl delay_500ms
+   mov w4, #(1 << BUZZER) | (1 << LED)
+   str w4, [x1, #GPCLR0]
+   bl delay_500ms
+   subs w3, w3, #1
+   bne alarm_loop
+   b loop_main
+// -------------------------
+// Approx 0.5s delay
+// -------------------------
+delay_500ms:
+   ldr x5, =0x3FFFFF
+delay_loop:
+   subs x5, x5, #1
+   bne delay_loop
+   ret
